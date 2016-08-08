@@ -1,14 +1,29 @@
 import os
 import sys
 import time
+import requests
 import subprocess
+import yaml
 from datetime import timedelta
+
+# todo add some checks to the VPN?
 
 import RPi.GPIO as GPIO
 import pyping
 
 
+def GetPrinterStatus():
+	global APIkey
+	hdr = {'X-Api-Key': APIkey}
+	r = requests.get('http://127.0.0.1:5000/api/connection', headers=hdr)
+	print r.status_code
+	x = r.json()
+	print x['current']['state']  # returns Closed, Operational, Printing
+	return x['current']['state']
+
+
 class Device(object):
+	# todo  embed ignor logic here if don't control device - dt 0 and reset noops
 	def __init__(self, n, port, dt):
 		self.pin = port
 		self.resettime = time.time()  # initialize to current time to handle case where a reset op was in progress
@@ -34,8 +49,13 @@ class Device(object):
 
 def pireboot(msg, ecode):
 	# cause the Pi to reboot - first gently, then violently, then via the hw timer
-	global noaction
+	global noaction, currentlyprinting, deferredPiReboot
 	logit(msg)
+	if currentlyprinting:
+		deferredPiReboot = True
+		logit('Defer reboot - printing')
+		return
+
 	updatestateandfilestamp('rebootedpi')
 	if noaction:
 		logit('Supressed reboot')
@@ -90,25 +110,58 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.cleanup()
 
-noaction = True
-routerIP = '192.168.1.1'
-googleIP = '8.8.8.8'
+with open('/home/pi/watchdog/netwatch.yaml') as y:
+	params = yaml.load(y)
+print params
 
-modem = Device('modem', 22, 1*60)
-router = Device('router', 17, 4*60)
-ISP = Device('ISP', 0, 60*60)
+p = params['pinghosts']
+routerIP = p['localip']
+externalIP = p['remoteip']
 
-logskip = 0
-logskipstart = 30
+noaction = params['noaction']
+basecycletime = params['cycletime']  # seconds
+logskipstart = params['lowfreq']
 
-# google = '192.168.3.3'
+p = params['modem']
+modemctl = p['controlled']
+if modemctl:
+	modem = Device('modem', p['port'], p['bootwait']*60)
+else:
+	modem = Device('modemnull', 0, 0)
+
+p = params['router']
+routerctl = p['controlled']
+if routerctl:
+	router = Device('router', p['port'], p['bootwait']*60)
+else:
+	router = Device('routernull', 0, 0)
+
+p = params['ISP']
+ISP = Device('ISP', 0, p['ISPhours']*60*60)
+outagebeforepireset = p['maxISPwait']*60*60
+
+p = params['printer']
+monitorprinter = p['controlled']
+offafter = prport = proffcmd = 0
+if monitorprinter:
+	APIkey = p['key']
+	offafter = p['offafter']*60
+	prport = p['port']
+	waitprinter = p['waitonreboot']
+	prmaxwait = p['waitmaxhrs']*60*60
+	proffcmd = p['offcmd']
+
 statusfile = '/home/pi/watchdog/lastcheck'
 logfile = '/home/pi/watchdog/watchdog.log'
 
 uptimebeforechecks = 10 # seconds to wait after reboot for pi network to stabilize
-basecycletime = 30  # seconds to sleep per cycle
-outagebeforepireset = 12*60*60  # 12 hours
 
+logskip = 0
+lastprinting = 0
+deferredPiReboot = False
+
+if monitorprinter:
+	GPIO.setup(prport, GPIO.OUT, initial=proffcmd)
 
 recoverystate = '-------'
 logit("Startup")
@@ -126,11 +179,24 @@ logit("Up: "+getuptime()[1])
 
 while True:
 	cyclestart = time.time()
+
+	if monitorprinter:
+		ps = GetPrinterStatus()
+		if ps == 'Printing':
+			lastprinting = cyclestart
+			currentlyprinting = True
+		else:
+			lastprinting = 0
+			currentlyprinting = False
+		if ps == 'Operational' and cyclestart - lastprinting > offafter:
+			# turn it off
+			GPIO.output(prport, 1)
+
+
 	print cyclestart,
-	inetup = pyping.ping(googleIP, timeout=200, count=3)
+	inetup = pyping.ping(externalIP, timeout=200, count=3)
 	routerup = pyping.ping(routerIP, timeout=200, count=3)
 	print time.time(), inetup.ret_code, routerup.ret_code
-	# print inetup.avg_rtt, routerup.avg_rtt
 	uptime_seconds, uptime_string = getuptime()
 
 	if uptime_seconds < uptimebeforechecks:
@@ -140,7 +206,13 @@ while True:
 		time.sleep(1)
 		continue
 
-	if inetup.ret_code == 0:
+	if deferredPiReboot:
+		if currentlyprinting:
+			logit('Still deferring', lowfreq=True)
+		else:
+			# execute the deferred reboot
+			pireboot('Printing ended reboot', 98)
+	elif inetup.ret_code == 0:
 		# All is well - clear any reset in progress and just get back to watching
 		if recoverystate <> 'watching':
 			# just came up so log it
@@ -210,10 +282,8 @@ while True:
 			# comms are really flakey - lost local then it came back but net out
 			# best to do a reset
 			pireboot("Wavering connections", 91)
-
 		else:
 			pireboot('Unknown state error 1: ' + recoverystate, 92)  # huh?  or perhaps check for initial?
-
 	else:
 		# no local ping response
 		if recoverystate == 'rebootedpi':
@@ -238,10 +308,8 @@ while True:
 			# comms were down last cycle so start the reboots
 			# Could reboot router first but Pi is more likely to have failed to try it first
 			pireboot('No local comms', 91)
-
 		else:
 			pireboot('Unknown state error 2: ' + recoverystate, 93)  # huh?  or perhaps check for initial?
-
 	# sleep awaiting events
 	cycleend = time.time()
 	time.sleep(basecycletime - (cycleend - cyclestart))

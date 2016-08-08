@@ -1,0 +1,33 @@
+cycletime:  30
+lowfreq: 30
+noaction: true
+
+pinghosts:
+  localip: 192.168.1.1
+  remoteip: 8.8.8.8
+
+modem:
+  controlled: true
+  bootwait: 4
+  port: 11
+
+router:
+  controlled: true
+  bootwait: 2
+  port: 12
+
+ISP:
+  ISPhours: 1
+  maxISPwait: 6 # hours to wait on apparent ISP outage before doing a total reboot of pi, modem, router
+
+printer:
+  controlled: true
+  key: 'F78984F5DCF14D4C80F03382C403EE79'
+  port: 4
+  offcmd; 1
+  offafter: 10 #minutes
+  waitonreboot: true
+  waitmaxhrs: 12
+
+
+
