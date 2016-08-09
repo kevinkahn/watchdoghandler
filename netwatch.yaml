@@ -24,8 +24,8 @@ printer:
   controlled: true
   key: 'F78984F5DCF14D4C80F03382C403EE79'
   port: 4
-  offcmd; 1
-  offafter: 10 #minutes
+  offcmd: 1
+  offafter: 2 #minutes
   waitonreboot: true
   waitmaxhrs: 12
 

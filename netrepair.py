@@ -1,3 +1,4 @@
+#!/usr/bin/python
 import os
 import sys
 import time
@@ -16,14 +17,17 @@ def GetPrinterStatus():
 	global APIkey
 	hdr = {'X-Api-Key': APIkey}
 	r = requests.get('http://127.0.0.1:5000/api/connection', headers=hdr)
-	print r.status_code
-	x = r.json()
-	print x['current']['state']  # returns Closed, Operational, Printing
-	return x['current']['state']
+	# print r.status_code
+	if r.status_code == 200:
+		x = r.json()
+		# print x['current']['state']  # returns Closed, Operational, Printing
+		return x['current']['state']
+	else:
+		#	print "OctoPrint not responding"
+		return "NoOctoPrint"
 
 
 class Device(object):
-	# todo  embed ignor logic here if don't control device - dt 0 and reset noops
 	def __init__(self, n, port, dt):
 		self.pin = port
 		self.resettime = time.time()  # initialize to current time to handle case where a reset op was in progress
@@ -34,14 +38,23 @@ class Device(object):
 
 	def reset(self):
 		self.resettime = time.time()
-		logit('Reset: ' + self.name + ' at ' + str(self.resettime))
-		if self.pin <> 0:
-			GPIO.output(self.pin, 1)
-			time.sleep(5)
-			GPIO.output(self.pin, 0)
+		if self.delaytime <> 0:
+			logit('Reset: ' + self.name + ' at ' + str(self.resettime))
+			if self.pin <> 0:
+				GPIO.output(self.pin, 1)
+				time.sleep(5)
+				GPIO.output(self.pin, 0)
+		else:
+			# not controlling device
+			logit("No reset, not controlling:" + self.name)
+
 
 	def waitforit(self):
-		return self.resettime + self.delaytime > time.time()
+		if self.delaytime <> 0:
+			return self.resettime + self.delaytime > time.time()
+		else:
+			# not controlling the device so never wait
+			return False
 
 	# this is safe against time jumping forward as it does late in boot
 	# just won't wait as long as expected
@@ -70,7 +83,7 @@ def pireboot(msg, ecode):
 	with open('/proc/sysrq-trigger') as s:
 		s.write('b')
 	logit("Post violent kill " + msg)
-	print "PiReboot: " + str(ecode)
+	#print "PiReboot: " + str(ecode)
 	sys.exit(ecode)
 
 
@@ -112,7 +125,6 @@ GPIO.cleanup()
 
 with open('/home/pi/watchdog/netwatch.yaml') as y:
 	params = yaml.load(y)
-print params
 
 p = params['pinghosts']
 routerIP = p['localip']
@@ -150,6 +162,7 @@ if monitorprinter:
 	waitprinter = p['waitonreboot']
 	prmaxwait = p['waitmaxhrs']*60*60
 	proffcmd = p['offcmd']
+	prforcedoff = False  # have never forced the printer power off - might be on but bot connected
 
 statusfile = '/home/pi/watchdog/lastcheck'
 logfile = '/home/pi/watchdog/watchdog.log'
@@ -157,8 +170,9 @@ logfile = '/home/pi/watchdog/watchdog.log'
 uptimebeforechecks = 10 # seconds to wait after reboot for pi network to stabilize
 
 logskip = 0
-lastprinting = 0
-deferredPiReboot = False
+lastprinting = time.time()
+deferredPiReboot = False  # prevents reboot while printer is active
+currentlyprinting = False  # never want to defer if not controlling a printer
 
 if monitorprinter:
 	GPIO.setup(prport, GPIO.OUT, initial=proffcmd)
@@ -185,18 +199,30 @@ while True:
 		if ps == 'Printing':
 			lastprinting = cyclestart
 			currentlyprinting = True
-		else:
-			lastprinting = 0
+			prforcedoff = False  # make sure if it finishes but disconnects before we notice we still power off
+		elif ps == 'Closed':
 			currentlyprinting = False
-		if ps == 'Operational' and cyclestart - lastprinting > offafter:
-			# turn it off
-			GPIO.output(prport, 1)
+			lastprinting = cyclestart  # fake recent printing - otherwise when turned on to operation it is immediately turned off
+			# make sure power if off
+			if not prforcedoff:
+				logit("Power off printer from Closed")
+				GPIO.output(prport, 1)
+				prforcedoff = True
+		elif ps == 'Operational':
+			if cyclestart - lastprinting > offafter:
+				# turn it off
+				logit("Power off printer from Operational")
+				GPIO.output(prport, 1)
+			else:
+				# not idle long enough to power off
+				prforcedoff = False  # make sure if it disconnects for some reason we power it off eventually
+		else:
+			logit('Unknown printer state: ' + ps)
 
-
-	print cyclestart,
+	#print cyclestart,
 	inetup = pyping.ping(externalIP, timeout=200, count=3)
 	routerup = pyping.ping(routerIP, timeout=200, count=3)
-	print time.time(), inetup.ret_code, routerup.ret_code
+	#print time.time(), inetup.ret_code, routerup.ret_code
 	uptime_seconds, uptime_string = getuptime()
 
 	if uptime_seconds < uptimebeforechecks:
@@ -268,13 +294,13 @@ while True:
 				updatestateandfilestamp('ISPfullreset1')
 				logit('Long ISP outage - reset modem')
 				modem.reset()
-				print "ISP outage modem/router reset"
+			#print "ISP outage modem/router reset"
 		elif recoverystate == 'startmodemreboot':
 			# last time through net was also down so - reboot modem (should we wait a cycle or 2?
 			updatestateandfilestamp('rebootingmodem')
 			modem.reset()
 			logit('Start modem reboot')
-			print "Reboot modem"
+		#print "Reboot modem"
 		elif recoverystate == 'watching':
 			# plan to do modem reboot if still down next cycle
 			updatestateandfilestamp('startmodemreboot')
@@ -290,7 +316,7 @@ while True:
 			# just rebooted pi but didn't get the network so reboot the router
 			updatestateandfilestamp('rebootingrouter')
 			logit('Start router reboot')
-			print "Reboot router"
+			#print "Reboot router"
 			router.reset()
 		elif recoverystate == 'rebootingrouter':
 			# have started the modem reboot so wait on that

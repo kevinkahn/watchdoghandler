@@ -1,0 +1,10 @@
+[Unit]
+Description=Network Health Watcher
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python -u /home/pi/watchdog/netrepair.py
+
+[Install]
+WantedBy = multi-user.target
