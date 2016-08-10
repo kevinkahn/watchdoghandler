@@ -72,7 +72,7 @@ def pireboot(msg, ecode):
 	updatestateandfilestamp('rebootedpi')
 	if noaction:
 		logit('Supressed reboot')
-		print 'Supressed reboot'
+		# print 'Supressed reboot'
 		return
 	subprocess.call('sudo reboot now', shell=True)
 	time.sleep(60)  # this should never finish

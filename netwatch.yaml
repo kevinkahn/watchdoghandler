@@ -1,18 +1,18 @@
 cycletime:  30
 lowfreq: 30
-noaction: true
+noaction: false
 
 pinghosts:
   localip: 192.168.1.1
   remoteip: 8.8.8.8
 
 modem:
-  controlled: true
+  controlled: false
   bootwait: 4
   port: 11
 
 router:
-  controlled: true
+  controlled: false
   bootwait: 2
   port: 12
 
@@ -25,7 +25,7 @@ printer:
   key: 'F78984F5DCF14D4C80F03382C403EE79'
   port: 4
   offcmd: 1
-  offafter: 2 #minutes
+  offafter: 10 #minutes
   waitonreboot: true
   waitmaxhrs: 12
 
