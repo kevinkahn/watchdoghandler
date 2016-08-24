@@ -87,7 +87,8 @@ def pireboot(msg, ecode):
 	sys.exit(ecode)
 
 
-# last try is the watchdog time expiry
+# last try is the
+#  time expiry
 
 
 def updatestateandfilestamp(state):
@@ -190,7 +191,7 @@ else:
 netlastseen = 0
 
 logit("Up: "+getuptime()[1])
-
+time.sleep(5)  # not sure it's need but want system to get through most of the boot - there were some failures
 while True:
 	cyclestart = time.time()
 
@@ -213,13 +214,13 @@ while True:
 				# turn it off
 				logit("Power off printer from Operational")
 				GPIO.output(prport, 1)
+				subprocess.call('//home/pi/scripts/webcam stop', shell=True)
 			else:
 				# not idle long enough to power off
 				prforcedoff = False  # make sure if it disconnects for some reason we power it off eventually
 		else:
 			logit('Unknown printer state: ' + ps)
 
-	#print cyclestart,
 	inetup = pyping.ping(externalIP, timeout=200, count=3)
 	routerup = pyping.ping(routerIP, timeout=200, count=3)
 	#print time.time(), inetup.ret_code, routerup.ret_code

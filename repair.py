@@ -16,7 +16,8 @@ code = sys.argv[1]
 
 ups, upstr = getuptime()
 
-if ups < 60:
+if ups < 600:
+	# for now 10 minutes to allow fixing things if my watchdog fails
 	with open(logfile, 'a', 0) as f:
 		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + 'Ignoring code: ' + str(code) + ' uptime: ' + upstr + '\n')
 	sys.exit(0)
