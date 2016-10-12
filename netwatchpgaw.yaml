@@ -1,5 +1,5 @@
 cycletime:  30
-lowfreq: 30
+lowfreq: 120
 noaction: false
 
 pinghosts:

@@ -247,7 +247,7 @@ while True:
 			updatestateandfilestamp('watching')
 		else:
 			touch()
-			logit('Network ok', lowfreq=True)
+			logit('Network ok, up: ' + getuptime()[1], lowfreq=True)
 		netlastseen = cyclestart  # note last seen ok time
 
 	elif recoverystate == 'ISPfullreset1':
