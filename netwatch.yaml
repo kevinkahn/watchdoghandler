@@ -21,7 +21,7 @@ ISP:
   maxISPwait: 6 # hours to wait on apparent ISP outage before doing a total reboot of pi, modem, router
 
 printer:
-  controlled: true
+  controlled: false
   key: 'F78984F5DCF14D4C80F03382C403EE79'
   port: 4
   offcmd: 1
