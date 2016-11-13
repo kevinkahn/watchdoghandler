@@ -11,13 +11,36 @@ from datetime import timedelta
 
 import RPi.GPIO as GPIO
 import pyping
+badping = 0
+totalping = 0
+
+
+
+def RobustPing(dest):
+	global totalping, badping
+	ok = False
+	# todo should make this a loop that tries until success or 10 failures
+	for i in range(10):
+		totalping = totalping + 1
+		try:
+			netup = pyping.ping(dest, timeout=5, count=1)
+		except:
+			logit('External Ping Exception')
+			inetup.ret_code = 1 # just assume bad this loop
+		if netup.ret_code == 0:
+			ok = True # one success in loop is success
+			break
+		else:
+			badping = badping + 1
+			logit('Ping failure to:' + dest + ' ' + str(badping))
+			#logit('Ping Failure to: ' + dest + ' ''+ str(netup.ret_code) + str(netup.output))
+	return ok
 
 
 def GetPrinterStatus():
 	global APIkey
 	hdr = {'X-Api-Key': APIkey}
 	r = requests.get('http://127.0.0.1:5000/api/connection', headers=hdr)
-	# print r.status_code
 	if r.status_code == 200:
 		x = r.json()
 		# print x['current']['state']  # returns Closed, Operational, Printing
@@ -63,7 +86,7 @@ class Device(object):
 def pireboot(msg, ecode):
 	# cause the Pi to reboot - first gently, then violently, then via the hw timer
 	global noaction, currentlyprinting, deferredPiReboot
-	logit(msg)
+	logit("REBOOT: "+msg)
 	if currentlyprinting:
 		deferredPiReboot = True
 		logit('Defer reboot - printing')
@@ -123,7 +146,8 @@ def getuptime():
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.cleanup()
-
+sys.stdout = open('/home/pi/watchdog/master.log', 'a', 0)
+sys.stderr = open('/home/pi/watchdog/master.err', 'a', 0)
 with open('/home/pi/watchdog/netwatch.yaml') as y:
 	params = yaml.load(y)
 
@@ -219,11 +243,12 @@ while True:
 				# not idle long enough to power off
 				prforcedoff = False  # make sure if it disconnects for some reason we power it off eventually
 		else:
-			logit('Unknown printer state: ' + ps)
+			pass
+			#logit('Unknown printer state: ' + ps)
 
-	inetup = pyping.ping(externalIP, timeout=200, count=3)
-	routerup = pyping.ping(routerIP, timeout=200, count=3)
-	#print time.time(), inetup.ret_code, routerup.ret_code
+	externalnetup = RobustPing(externalIP)
+	localrouterup = RobustPing(routerIP)
+
 	uptime_seconds, uptime_string = getuptime()
 
 	if uptime_seconds < uptimebeforechecks:
@@ -239,7 +264,7 @@ while True:
 		else:
 			# execute the deferred reboot
 			pireboot('Printing ended reboot', 98)
-	elif inetup.ret_code == 0:
+	elif externalnetup:
 		# All is well - clear any reset in progress and just get back to watching
 		if recoverystate <> 'watching':
 			# just came up so log it
@@ -247,7 +272,7 @@ while True:
 			updatestateandfilestamp('watching')
 		else:
 			touch()
-			logit('Network ok, up: ' + getuptime()[1], lowfreq=True)
+			logit('Network ok, up: '+ getuptime()[1]+' '+str(badping)+'/'+str(totalping),lowfreq=True)
 		netlastseen = cyclestart  # note last seen ok time
 
 	elif recoverystate == 'ISPfullreset1':
@@ -275,7 +300,7 @@ while True:
 				ISP.reset()
 				updatestateandfilestamp('ISPoutage')
 
-	elif routerup.ret_code == 0:
+	elif localrouterup:
 		# net down router up - modem down or ISP down
 		if recoverystate == 'rebootingmodem':
 			# already started the reboot so just wait for that to finish
