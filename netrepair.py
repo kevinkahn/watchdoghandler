@@ -13,41 +13,40 @@ import RPi.GPIO as GPIO
 import pyping
 badping = 0
 totalping = 0
-
-
+null = open('/dev/null','a')
 
 def RobustPing(dest):
-	global totalping, badping
+	global totalping, badping, null
 	ok = False
+	cmd = 'ping -c 1 -W 1 ' + dest
 	# todo should make this a loop that tries until success or 10 failures
 	for i in range(10):
 		totalping = totalping + 1
-		try:
-			netup = pyping.ping(dest, timeout=5, count=1)
-		except:
-			logit('External Ping Exception')
-			inetup.ret_code = 1 # just assume bad this loop
-		if netup.ret_code == 0:
+		p = subprocess.call(cmd, shell=True, stdout=null, stderr=null)
+		if p == 0:
 			ok = True # one success in loop is success
 			break
 		else:
 			badping = badping + 1
-			logit('Ping failure to:' + dest + ' ' + str(badping))
-			#logit('Ping Failure to: ' + dest + ' ''+ str(netup.ret_code) + str(netup.output))
+			logit('Ping failure to: ' + dest + ' ' + str(badping))
 	return ok
 
 
 def GetPrinterStatus():
 	global APIkey
 	hdr = {'X-Api-Key': APIkey}
-	r = requests.get('http://127.0.0.1:5000/api/connection', headers=hdr)
-	if r.status_code == 200:
-		x = r.json()
-		# print x['current']['state']  # returns Closed, Operational, Printing
-		return x['current']['state']
-	else:
-		#	print "OctoPrint not responding"
-		return "NoOctoPrint"
+	try:
+		r = requests.get('http://127.0.0.1:5000/api/connection', headers=hdr)
+		if r.status_code == 200:
+			x = r.json()
+			# print x['current']['state']  # returns Closed, Operational, Printing
+			return x['current']['state']
+		else:
+			logit("OctoPrint non success code: "+ str(r.status_code))
+			return "NoOctoPrint"
+	except:
+		logit("Octoprint didn't respond")
+		return"NoOctoPrint comms"
 
 
 class Device(object):
@@ -74,6 +73,7 @@ class Device(object):
 
 	def waitforit(self):
 		if self.delaytime <> 0:
+			logit('Waiting on '+n+' next action in '+str(self.resettime+self.delaytime-time.time()))
 			return self.resettime + self.delaytime > time.time()
 		else:
 			# not controlling the device so never wait
@@ -89,6 +89,7 @@ def pireboot(msg, ecode):
 	logit("REBOOT: "+msg)
 	if currentlyprinting:
 		deferredPiReboot = True
+		touch()
 		logit('Defer reboot - printing')
 		return
 
@@ -118,16 +119,18 @@ def updatestateandfilestamp(state):
 	global recoverystate, statusfile
 	with open(statusfile,'w',0) as f:
 		f.write(state)
+	touch()
 	logit('State change: ' + recoverystate + ' to: ' + state)
 	recoverystate = state
 
 def touch():
+	global statusfile
 	with open(statusfile,'a'):
 		os.utime(statusfile, None)
 
 
 def logit(msg, lowfreq=False):
-	global logfile, recoverystate, logskip, logskipstart
+	global logfile, recoverystate, logskip, logskipstart, deferredPiReboot,currentlyprinting
 	if lowfreq:
 		logskip += 1
 		if logskip < logskipstart:
@@ -135,7 +138,8 @@ def logit(msg, lowfreq=False):
 		else:
 			logskip = 0
 	with open(logfile,'a',0) as f:
-		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + msg + ' (' + recoverystate + ')\n')
+		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + msg + ' (' + recoverystate + ')'+
+		str(deferredPiReboot)+'/'+str(currentlyprinting)+'\n')
 
 def getuptime():
 	with open('/proc/uptime', 'r') as f:
@@ -260,6 +264,7 @@ while True:
 
 	if deferredPiReboot:
 		if currentlyprinting:
+			touch()
 			logit('Still deferring', lowfreq=True)
 		else:
 			# execute the deferred reboot
@@ -357,10 +362,12 @@ while True:
 			# net was fine a moment ago to pend action for next cycle
 			updatestateandfilestamp('picommsunknown')
 		elif recoverystate == 'picommsunknown':
+			touch()
 			# comms were down last cycle so start the reboots
 			# Could reboot router first but Pi is more likely to have failed to try it first
 			pireboot('No local comms', 91)
 		else:
+			touch()
 			pireboot('Unknown state error 2: ' + recoverystate, 93)  # huh?  or perhaps check for initial?
 	# sleep awaiting events
 	cycleend = time.time()
