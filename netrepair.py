@@ -7,16 +7,23 @@ import subprocess
 import yaml
 from datetime import timedelta
 
-# todo add some checks to the VPN?
+# TODO add some checks to the VPN?
 
 import RPi.GPIO as GPIO
-import pyping
 badping = 0
 totalping = 0
 null = open('/dev/null','a')
 
 def RobustPing(dest):
 	global totalping, badping, null
+	print dest
+	if dest[0] == '~': # for testing set destinations to ~L ~R
+		if os.path.isfile(dest):
+			logit("Simulate good ping of "+dest)
+			return True
+		else:
+			logit("Simulate failed ping of "+dest)
+			return False
 	ok = False
 	cmd = 'ping -c 1 -W 1 ' + dest
 	# todo should make this a loop that tries until success or 10 failures
@@ -30,6 +37,7 @@ def RobustPing(dest):
 			badping = badping + 1
 			logit('Ping failure to: ' + dest + ' ' + str(badping))
 	return ok
+
 
 
 def GetPrinterStatus():
@@ -56,16 +64,16 @@ class Device(object):
 		self.name = n
 		self.delaytime = dt
 		if self.pin <> 0:
-			GPIO.setup(port, GPIO.OUT, initial=0)
+			GPIO.setup(port, GPIO.OUT, initial=GPIO.HIGH)
 
 	def reset(self):
 		self.resettime = time.time()
 		if self.delaytime <> 0:
 			logit('Reset: ' + self.name + ' at ' + str(self.resettime))
 			if self.pin <> 0:
-				GPIO.output(self.pin, 1)
-				time.sleep(5)
 				GPIO.output(self.pin, 0)
+				time.sleep(5)
+				GPIO.output(self.pin, 1)
 		else:
 			# not controlling device
 			logit("No reset, not controlling:" + self.name)
@@ -73,7 +81,7 @@ class Device(object):
 
 	def waitforit(self):
 		if self.delaytime <> 0:
-			logit('Waiting on '+n+' next action in '+str(self.resettime+self.delaytime-time.time()))
+			logit('Waiting on '+self.name+' next action in '+str(self.resettime+self.delaytime-time.time()))
 			return self.resettime + self.delaytime > time.time()
 		else:
 			# not controlling the device so never wait
@@ -152,12 +160,13 @@ GPIO.setwarnings(False)
 GPIO.cleanup()
 sys.stdout = open('/home/pi/watchdog/master.log', 'a', 0)
 sys.stderr = open('/home/pi/watchdog/master.err', 'a', 0)
-with open('/home/pi/watchdog/netwatch.yaml') as y:
+with open('./netwatch.yaml') as y:
 	params = yaml.load(y)
 
 p = params['pinghosts']
 routerIP = p['localip']
 externalIP = p['remoteip']
+print 'Router:',routerIP,'External:',externalIP
 
 noaction = params['noaction']
 basecycletime = params['cycletime']  # seconds
@@ -184,6 +193,7 @@ outagebeforepireset = p['maxISPwait']*60*60
 p = params['printer']
 monitorprinter = p['controlled']
 offafter = prport = proffcmd = 0
+prforcedoff = False
 if monitorprinter:
 	APIkey = p['key']
 	offafter = p['offafter']*60

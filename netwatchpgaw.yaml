@@ -9,7 +9,7 @@ pinghosts:
 modem:
   controlled: true
   bootwait: 4
-  port: 11
+  port: 1
 
 router:
   controlled: true
