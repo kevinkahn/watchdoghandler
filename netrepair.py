@@ -5,6 +5,7 @@ import time
 import requests
 import subprocess
 import yaml
+import cgitb
 from datetime import timedelta
 
 # TODO add some checks to the VPN?
@@ -16,7 +17,7 @@ null = open('/dev/null','a')
 
 def RobustPing(dest):
 	global totalping, badping, null
-	print dest
+	#print dest
 	if dest[0] == '~': # for testing set destinations to ~L ~R
 		if os.path.isfile(dest):
 			logit("Simulate good ping of "+dest)
@@ -138,15 +139,15 @@ def touch():
 
 
 def logit(msg, lowfreq=False):
-	global logfile, recoverystate, logskip, logskipstart, deferredPiReboot,currentlyprinting
+	global logfile, recoverystate, logskip, logskipstart, deferredPiReboot,currentlyprinting,cyclecount
 	if lowfreq:
-		logskip += 1
-		if logskip < logskipstart:
+		if cyclecount < logskip:
 			return
-		else:
-			logskip = 0
+		elif cyclecount > logskip:
+			logskip = cyclecount + logskipstart
+			return
 	with open(logfile,'a',0) as f:
-		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + msg + ' (' + recoverystate + ')'+
+		f.write('(' + str(cyclecount)+') ' + time.strftime('%a %d %b %Y %H:%M:%S ') + msg + ' (' + recoverystate + ')'+
 		str(deferredPiReboot)+'/'+str(currentlyprinting)+'\n')
 
 def getuptime():
@@ -155,12 +156,24 @@ def getuptime():
 	up_string = str(timedelta(seconds=up_seconds))
 	return up_seconds, up_string
 
+statusfile = '/home/pi/watchdog/lastcheck'
+logfile = '/home/pi/watchdog/watchdog.log'
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.cleanup()
+cgitb.enable(format='text')
+with open(logfile, 'a', 0) as f:  # really should be a logit call but vars not exist yet
+	f.write("------------------------------------------------\n")
+	f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + "Starting " + getuptime()[1] +'\n')
+
+time.sleep(10) # let the system clock reset
 sys.stdout = open('/home/pi/watchdog/master.log', 'a', 0)
 sys.stderr = open('/home/pi/watchdog/master.err', 'a', 0)
-with open('./netwatch.yaml') as y:
+print >> sys.stderr, "------------"
+print >> sys.stderr, "Start at: " + time.strftime('%a %d %b %Y %H:%M:%S ')
+print >> sys.stdout, "------------"
+print >> sys.stdout, "Start at: " + time.strftime('%a %d %b %Y %H:%M:%S ')
+with open('/home/pi/watchdog/netwatch.yaml') as y:
 	params = yaml.load(y)
 
 p = params['pinghosts']
@@ -203,12 +216,8 @@ if monitorprinter:
 	proffcmd = p['offcmd']
 	prforcedoff = False  # have never forced the printer power off - might be on but bot connected
 
-statusfile = '/home/pi/watchdog/lastcheck'
-logfile = '/home/pi/watchdog/watchdog.log'
-
-uptimebeforechecks = 10 # seconds to wait after reboot for pi network to stabilize
-
-logskip = 0
+cyclecount = 0
+logskip = 1 # on first pass cyclecount will get incremented to 1 and low freq will print
 lastprinting = time.time()
 deferredPiReboot = False  # prevents reboot while printer is active
 currentlyprinting = False  # never want to defer if not controlling a printer
@@ -227,14 +236,21 @@ if os.path.isfile(statusfile):
 else:
 	updatestateandfilestamp('unknown')
 netlastseen = 0
+lastps = "--------"
 
 logit("Up: "+getuptime()[1])
 time.sleep(5)  # not sure it's need but want system to get through most of the boot - there were some failures
 while True:
 	cyclestart = time.time()
+	cyclecount += 1
 
 	if monitorprinter:
 		ps = GetPrinterStatus()
+		c2 = time.time()
+		if lastps <> ps:
+			logit("Printer state changed from "+lastps+' to '+ps)
+		lastps = ps
+		logit("Printer state: "+ps,lowfreq=True)
 		if ps == 'Printing':
 			lastprinting = cyclestart
 			currentlyprinting = True
@@ -247,10 +263,10 @@ while True:
 				logit("Power off printer from Closed")
 				GPIO.output(prport, 1)
 				prforcedoff = True
-		elif ps == 'Operational':
+		elif ps in ('Operational',"Offline"):
 			if cyclestart - lastprinting > offafter:
 				# turn it off
-				logit("Power off printer from Operational")
+				logit("Power off printer from "+ ps)
 				GPIO.output(prport, 1)
 				subprocess.call('//home/pi/scripts/webcam stop', shell=True)
 			else:
@@ -258,29 +274,18 @@ while True:
 				prforcedoff = False  # make sure if it disconnects for some reason we power it off eventually
 		else:
 			pass
-			#logit('Unknown printer state: ' + ps)
+			logit('Unknown printer state: ' + ps)
+
 
 	externalnetup = RobustPing(externalIP)
 	localrouterup = RobustPing(routerIP)
 
 	uptime_seconds, uptime_string = getuptime()
 
-	if uptime_seconds < uptimebeforechecks:
-		# Pi probably hasn't actually gotten the net up yet
-		logit('Waiting minumum uptime: ' + uptime_string)
-		os.utime(statusfile,None)
-		time.sleep(1)
-		continue
 
-	if deferredPiReboot:
-		if currentlyprinting:
-			touch()
-			logit('Still deferring', lowfreq=True)
-		else:
-			# execute the deferred reboot
-			pireboot('Printing ended reboot', 98)
-	elif externalnetup:
+	if externalnetup:
 		# All is well - clear any reset in progress and just get back to watching
+		deferredPiReboot = False # clear any deferred reboot since net has recovered
 		if recoverystate <> 'watching':
 			# just came up so log it
 			logit('Network up from: ' + recoverystate)
@@ -289,7 +294,13 @@ while True:
 			touch()
 			logit('Network ok, up: '+ getuptime()[1]+' '+str(badping)+'/'+str(totalping),lowfreq=True)
 		netlastseen = cyclestart  # note last seen ok time
-
+	elif deferredPiReboot:
+		if currentlyprinting:
+			touch()
+			logit('Still deferring', lowfreq=True)
+		else:
+			# execute the deferred reboot
+			pireboot('Printing ended reboot', 98)
 	elif recoverystate == 'ISPfullreset1':
 		# doing a full reset so wait on modem time to reset then do modem reset
 		touch()
@@ -371,14 +382,25 @@ while True:
 		elif recoverystate == 'watching':
 			# net was fine a moment ago to pend action for next cycle
 			updatestateandfilestamp('picommsunknown')
+			waitonrouterhack = 20
 		elif recoverystate == 'picommsunknown':
 			touch()
-			# comms were down last cycle so start the reboots
-			# Could reboot router first but Pi is more likely to have failed to try it first
-			pireboot('No local comms', 91)
+			waitonrouterhack -= 1
+			if waitonrouterhack > 0:
+				logit("Trying to ride out router weirdness: " + str(waitonrouterhack))
+			else:
+				# comms have been down in weird way for many cycles so start the reboots
+				# Could reboot router first but Pi is more likely to have failed to try it first
+				pireboot('No local comms', 91)
 		else:
 			touch()
 			pireboot('Unknown state error 2: ' + recoverystate, 93)  # huh?  or perhaps check for initial?
 	# sleep awaiting events
 	cycleend = time.time()
-	time.sleep(basecycletime - (cycleend - cyclestart))
+	sleepduration = basecycletime - (cycleend - cyclestart)
+	#print time.strftime('%a %d %b %Y %H:%M:%S '),cyclestart, c2, cycleend, sleepduration
+	try:
+		time.sleep(sleepduration)
+	except:
+		logit("Main sleep exception: "+ str(sleepduration)+" Start: " + str(cyclestart) + " Mid: " + str(c2) + " End: "+ str(cycleend))
+		time.sleep(6)  # wait a bit anyway

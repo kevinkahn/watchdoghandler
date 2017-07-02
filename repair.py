@@ -10,7 +10,8 @@ def getuptime():
 	return up_seconds, up_string
 
 
-logfile = '/home/pi/watchdog/repair.log'
+logfile12 = '/home/pi/watchdog/repair.log'  # delete
+logfile = '/home/pi/watchdog/watchdog.log'
 
 code = sys.argv[1]
 
@@ -19,9 +20,15 @@ ups, upstr = getuptime()
 if ups < 600:
 	# for now 10 minutes to allow fixing things if my watchdog fails
 	with open(logfile, 'a', 0) as f:
-		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + 'Ignoring code: ' + str(code) + ' uptime: ' + upstr + '\n')
+		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + '***** Ignoring code: ' + str(code) + ' uptime: ' + upstr + '\n')
 	sys.exit(0)
 else:
 	with open(logfile, 'a', 0) as f:
-		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + 'Acking hang code: ' + str(code) + ' uptime: ' + upstr + '\n')
+		f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + '***** Watchdog saw hang: ' + str(code) + ' uptime: ' + upstr + '\n')
 	sys.exit(int(code))
+
+
+
+
+
+
