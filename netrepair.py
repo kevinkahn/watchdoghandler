@@ -7,6 +7,7 @@ import subprocess
 import yaml
 import cgitb
 from datetime import timedelta
+from subprocess import call
 
 # TODO add some checks to the VPN?
 
@@ -140,12 +141,12 @@ def touch():
 
 def logit(msg, lowfreq=False):
 	global logfile, recoverystate, logskip, logskipstart, deferredPiReboot,currentlyprinting,cyclecount
-	if lowfreq:
-		if cyclecount < logskip:
-			return
-		elif cyclecount > logskip:
-			logskip = cyclecount + logskipstart
-			return
+#	if lowfreq:
+#		if cyclecount < logskip:
+#			return
+#		elif cyclecount > logskip:
+#			logskip = cyclecount + logskipstart
+#			return
 	with open(logfile,'a',0) as f:
 		f.write('(' + str(cyclecount)+') ' + time.strftime('%a %d %b %Y %H:%M:%S ') + msg + ' (' + recoverystate + ')'+
 		str(deferredPiReboot)+'/'+str(currentlyprinting)+'\n')
@@ -155,6 +156,25 @@ def getuptime():
 		up_seconds = float(f.readline().split()[0])
 	up_string = str(timedelta(seconds=up_seconds))
 	return up_seconds, up_string
+
+dirname = '/home/pi/watchdog'
+cwd = os.getcwd()
+os.chdir(dirnm)
+q = [k for k in os.listdir('.') if 'watchdog.log' in k]
+if "watchdog.log." + str(20) in q:
+	os.remove('watchdog.log.20')
+for i in range(19, 0, -1):
+	if "watchdog.log." + str(i) in q:
+		os.rename('watchdog.log.' + str(i), "watchdog.log." + str(i + 1))
+try:
+	os.rename('watchdog.log', 'watchdog.log.1')
+except:
+	pass
+with open('watchdog.log', 'w') as f:
+	f.write('New logfile at: '+time.strftime('%a %d %b %Y %H:%M:%S'))
+
+os.chmod('watchdog.log', 0o555)
+os.chdir(cwd)
 
 statusfile = '/home/pi/watchdog/lastcheck'
 logfile = '/home/pi/watchdog/watchdog.log'
@@ -239,6 +259,8 @@ netlastseen = 0
 lastps = "--------"
 
 logit("Up: "+getuptime()[1])
+with open(logfile, 'a', 0) as f:
+    call("iwconfig",stdout=f)
 time.sleep(5)  # not sure it's need but want system to get through most of the boot - there were some failures
 while True:
 	cyclestart = time.time()
@@ -382,12 +404,16 @@ while True:
 		elif recoverystate == 'watching':
 			# net was fine a moment ago to pend action for next cycle
 			updatestateandfilestamp('picommsunknown')
+			with open(logfile, 'a', 0) as f:
+				call("iwconfig", stdout=f)
 			waitonrouterhack = 20
 		elif recoverystate == 'picommsunknown':
 			touch()
 			waitonrouterhack -= 1
 			if waitonrouterhack > 0:
 				logit("Trying to ride out router weirdness: " + str(waitonrouterhack))
+				with open(logfile, 'a', 0) as f:
+					call("iwconfig", stdout=f)
 			else:
 				# comms have been down in weird way for many cycles so start the reboots
 				# Could reboot router first but Pi is more likely to have failed to try it first
