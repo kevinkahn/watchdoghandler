@@ -157,7 +157,7 @@ def getuptime():
 	up_string = str(timedelta(seconds=up_seconds))
 	return up_seconds, up_string
 
-dirname = '/home/pi/watchdog'
+dirnm = '/home/pi/watchdog'
 cwd = os.getcwd()
 os.chdir(dirnm)
 q = [k for k in os.listdir('.') if 'watchdog.log' in k]
