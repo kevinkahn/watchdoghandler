@@ -8,8 +8,17 @@ import yaml
 import cgitb
 from datetime import timedelta
 from subprocess import call
+import signal
 
 # TODO add some checks to the VPN?
+
+def handler(signum,frame):
+	if signum == signal.SIGTERM:
+		logit("SIGTERM received - system must be shutting down")
+		os._exit(9)  # don't let python do any more cleanup
+		logit("Why this post exit????")
+	else:
+		logit("Singal received: "+str(signum))
 
 import RPi.GPIO as GPIO
 badping = 0
@@ -157,6 +166,7 @@ def getuptime():
 	up_string = str(timedelta(seconds=up_seconds))
 	return up_seconds, up_string
 
+signal.signal(signal.SIGTERM, handler)
 dirnm = '/home/pi/watchdog'
 cwd = os.getcwd()
 os.chdir(dirnm)
@@ -171,7 +181,7 @@ try:
 except:
 	pass
 with open('watchdog.log', 'w') as f:
-	f.write('New logfile at: '+time.strftime('%a %d %b %Y %H:%M:%S'))
+	f.write('New logfile at: '+time.strftime('%a %d %b %Y %H:%M:%S')+"\n")
 
 os.chmod('watchdog.log', 0o555)
 os.chdir(cwd)
@@ -182,9 +192,10 @@ GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
 GPIO.cleanup()
 cgitb.enable(format='text')
+me = os.getpid()
 with open(logfile, 'a', 0) as f:  # really should be a logit call but vars not exist yet
 	f.write("------------------------------------------------\n")
-	f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + "Starting " + getuptime()[1] +'\n')
+	f.write(time.strftime('%a %d %b %Y %H:%M:%S ') + "Starting pid: " + str(me) + " up: " + getuptime()[1] +'\n')
 
 time.sleep(10) # let the system clock reset
 sys.stdout = open('/home/pi/watchdog/master.log', 'a', 0)
