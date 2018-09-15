@@ -12,7 +12,7 @@ def logit(msg):
 	logfile.flush()
 
 def RobustPing(dests):
-	global badping, testfile, destindex, lastdest
+	global badping, testfile, destindex, lastdest, null
 	dest = dests[destindex]
 	lastdest = dest
 	destindex = (destindex + 1)%len(dests)
@@ -42,6 +42,7 @@ lastdest = ''
 netup = True
 netdowntime = 0
 resettime = 0
+null = open('/dev/null','a')
 
 
 parser = argparse.ArgumentParser(description='Reset modem on prolonged internet outage')
