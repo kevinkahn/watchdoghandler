@@ -11,6 +11,7 @@ from subprocess import call
 import signal
 
 # TODO add some checks to the VPN?
+# TODO check a ping on loopback of 127.0.0.1 on failures to see if net is working at all
 
 def handler(signum,frame):
 	if signum == signal.SIGTERM:
@@ -18,7 +19,7 @@ def handler(signum,frame):
 		os._exit(9)  # don't let python do any more cleanup
 		logit("Why this post exit????")
 	else:
-		logit("Singal received: "+str(signum))
+		logit("Signal received: "+str(signum))
 
 import RPi.GPIO as GPIO
 badping = 0
