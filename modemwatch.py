@@ -2,6 +2,7 @@ import argparse
 import time
 import requests
 import os
+import subprocess
 
 def logit(msg):
 	global logfile
@@ -59,7 +60,7 @@ cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
 test = args.test
 testfile = args.testfile
 
-print(args)
+#print(args)
 logit('*********************************************')
 logit('Modemwatch starting')
 for arg, val in vars(args).items():
