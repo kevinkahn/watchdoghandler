@@ -4,7 +4,6 @@ import time
 import requests
 import os
 import subprocess
-
 def logit(msg):
 	global logfile
 
