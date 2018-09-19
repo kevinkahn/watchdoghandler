@@ -11,7 +11,7 @@ def logit(msg):
 	logfile.write(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg + '\n')
 	logfile.flush()
 
-def RobustPing(dests):
+def RobustPing(dests, verbose=True):
 	global badping, testfile, destindex, lastdest, null
 	dest = dests[destindex]
 	lastdest = dest
@@ -33,7 +33,11 @@ def RobustPing(dests):
 			break
 		else:
 			badping = badping + 1
-			logit('Ping failure to: ' + dest + ' ' + str(badping))
+			if verbose:
+				logit('Ping failure to: ' + dest + ' ' + str(badping))
+			else:
+				if badping % 100 == 0:
+					logit('Ping failure count = '+str(badping))
 	return ok
 
 badping = 0
