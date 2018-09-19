@@ -85,7 +85,7 @@ while True:
 			logit('Ping fail: ' + lastdest + ' Net marked down ')
 	while not netup:
 		time.sleep(args.interval)
-		if RobustPing(args.dests):
+		if RobustPing(args.dests,verbose=args.verbose):
 			logit('Network back up')
 			netup = True
 		else:
