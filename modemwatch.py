@@ -76,7 +76,7 @@ for arg, val in vars(args).items():
 #logit(repr(args))
 while True:
 	while netup:
-		if time.time() > nextconfirm & confirminterval != 0:
+		if (time.time() > nextconfirm) and (confirminterval != 0):
 			logit('Confirm watchdog running')
 			nextconfirm = time.time() + confirminterval
 		time.sleep(args.interval)
