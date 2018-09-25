@@ -57,6 +57,7 @@ parser.add_argument('--dests',nargs='*',default='8.8.8.8')
 parser.add_argument('--logfile',default = 'modemwatch.log', type=argparse.FileType('a'))
 parser.add_argument('-v', '--verbose',default = False, action='store_true')
 parser.add_argument('-t', '--test',default=False,action='store_true')
+parser.add_argument('-c', '--confirm',default=12, type = int, help = 'interval in hours for issuing log messages confirming running')
 parser.add_argument('--testfile',default='simnetup')
 parser.add_argument('--modem',default='modempowercontrol.pdxhome')
 args = parser.parse_args()
@@ -64,6 +65,8 @@ logfile = args.logfile
 cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
 test = args.test
 testfile = args.testfile
+confirminterval = args.confirm * 60 * 60
+nextconfirm = time.time()+confirminterval
 
 #print(args)
 logit('*********************************************')
@@ -73,6 +76,9 @@ for arg, val in vars(args).items():
 #logit(repr(args))
 while True:
 	while netup:
+		if time.time() > nextconfirm & confirminterval != 0:
+			logit('Confirm watchdog running')
+			nextconfirm = time.time() + confirminterval
 		time.sleep(args.interval)
 		if RobustPing(args.dests):
 			if args.verbose:
