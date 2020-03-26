@@ -59,10 +59,14 @@ parser.add_argument('-v', '--verbose',default = False, action='store_true')
 parser.add_argument('-t', '--test',default=False,action='store_true')
 parser.add_argument('-c', '--confirm',default=12, type = int, help = 'interval in hours for issuing log messages confirming running')
 parser.add_argument('--testfile',default='simnetup')
-parser.add_argument('--modem',default='modempowercontrol.pdxhome')
+parser.add_argument('--cmd', default='')
+parser.add_argument('--modem',default='zzmodempowercontrol.pdxhome')
 args = parser.parse_args()
 logfile = args.logfile
-cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
+if args.cmd == '':
+	cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
+else:
+	cmd = args.cmd
 test = args.test
 testfile = args.testfile
 confirminterval = args.confirm * 60 * 60
@@ -98,7 +102,10 @@ while True:
 			now = time.time()
 			logit('Ping continues fail: '+ lastdest + ' Down {0:.0f} seconds {1:.0f} to reset'.format(now - netdowntime,args.outage*60 - (now-resettime)))
 			if now - resettime > args.outage*60:
-				r = requests.get(cmd)
+				if test:
+					print(cmd)
+				else:
+					r = requests.get(cmd)
 				logit('Issue modem reset; delay {0:d} seconds; status response: {1:d}'.format(args.wait,r.status_code))
 				time.sleep(args.wait)
 				resettime = time.time()
