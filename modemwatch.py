@@ -1,4 +1,4 @@
-#!/usr/bin/python -u
+#!/usr/bin/python
 import argparse
 import time
 import requests
@@ -7,14 +7,13 @@ import subprocess
 def logit(msg):
 	global logfile, test
 
-#	with open(logfile,'a',0) as f:
 	logfile.write(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg + '\n')
 	logfile.flush()
 	if test:
 		print(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg)
 
 def RobustPing(dests, verbose=True):
-	global badping, testfile, destindex, lastdest, null
+	global badping, testfile, destindex, lastdest, null, test
 	dest = dests[destindex]
 	lastdest = dest
 	destindex = (destindex + 1)%len(dests)
@@ -50,7 +49,6 @@ netdowntime = 0
 resettime = 0
 null = open('/dev/null','a')
 
-
 parser = argparse.ArgumentParser(description='Reset modem on prolonged internet outage')
 parser.add_argument('-i', '--interval', default = 60, type = int, help = 'ping interval in seconds')
 parser.add_argument('-o', '--outage', default = 30, type = int, help = 'reset after this many minutes')
@@ -62,7 +60,7 @@ parser.add_argument('-t', '--test',default=False,action='store_true')
 parser.add_argument('-c', '--confirm',default=12, type = int, help = 'interval in hours for issuing log messages confirming running')
 parser.add_argument('--testfile',default='simnetup')
 parser.add_argument('--cmd', default='')
-parser.add_argument('--modem',default='zzmodempowercontrol.pdxhome')
+parser.add_argument('--modem',default='modempowercontrol.pdxhome')
 args = parser.parse_args()
 logfile = args.logfile
 if args.cmd == '':
@@ -71,8 +69,12 @@ else:
 	cmd = args.cmd
 test = args.test
 if test:
+	args.interval = 1
 	args.outage = .25
 	args.wait = 10
+	logfile.seek(0)
+	logfile.truncate()
+	logit('Truncated log for testing')
 testfile = args.testfile
 confirminterval = args.confirm * 60 * 60
 nextconfirm = time.time()+confirminterval
@@ -82,7 +84,6 @@ logit('*********************************************')
 logit('Modemwatch starting')
 for arg, val in vars(args).items():
 	logit('    '+ repr(arg)+' = '+repr(val))
-#logit(repr(args))
 while True:
 	while netup:
 		if (time.time() > nextconfirm) and (confirminterval != 0):
