@@ -5,11 +5,13 @@ import requests
 import os
 import subprocess
 def logit(msg):
-	global logfile
+	global logfile, test
 
 #	with open(logfile,'a',0) as f:
 	logfile.write(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg + '\n')
 	logfile.flush()
+	if test:
+		print(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg)
 
 def RobustPing(dests, verbose=True):
 	global badping, testfile, destindex, lastdest, null
@@ -68,6 +70,9 @@ if args.cmd == '':
 else:
 	cmd = args.cmd
 test = args.test
+if test:
+	args.outage = .25
+	args.wait = 10
 testfile = args.testfile
 confirminterval = args.confirm * 60 * 60
 nextconfirm = time.time()+confirminterval
@@ -103,10 +108,10 @@ while True:
 			logit('Ping continues fail: '+ lastdest + ' Down {0:.0f} seconds {1:.0f} to reset'.format(now - netdowntime,args.outage*60 - (now-resettime)))
 			if now - resettime > args.outage*60:
 				if test:
-					print(cmd)
+					logit('Test modem reset; delay {} seconds: {}'.format(args.wait, cmd))
 				else:
 					r = requests.get(cmd)
-				logit('Issue modem reset; delay {0:d} seconds; status response: {1:d}'.format(args.wait,r.status_code))
+					logit('Issue modem reset; delay {0:d} seconds; status response: {1:d}'.format(args.wait,r.status_code))
 				time.sleep(args.wait)
 				resettime = time.time()
 				logit('Resuming network testing')
