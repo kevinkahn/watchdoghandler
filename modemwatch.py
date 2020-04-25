@@ -111,8 +111,25 @@ while True:
 				if test:
 					logit('Test modem reset; delay {} seconds: {}'.format(args.wait, cmd))
 				else:
-					r = requests.get(cmd)
-					logit('Issue modem reset; delay {0:d} seconds; status response: {1:d}'.format(args.wait,r.status_code))
+					logit('Issue modem reset and delay {0:d} seconds'.format(args.wait))
+					tries = 5
+					success = False
+					while not success:
+						try:
+							r = requests.get(cmd)
+							logit('Reset try response (tries = {}): {}'.format(tries, r.status_code))
+							if r.status_code == 200:
+								success = True
+						except Exception as E:
+							logit('Exception trying to do reset (tries  {}): {}'.format(tries, E))
+							tries = tries - 1
+							if tries > 0:
+								time.sleep(15)
+							else:
+								logit('Reset failed multiple times - restart watchdog')
+								raise ConnectionAbortedError
+							
+
 				time.sleep(args.wait)
 				resettime = time.time()
 				logit('Resuming network testing')
