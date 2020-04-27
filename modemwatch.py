@@ -128,7 +128,7 @@ while True:
 							else:
 								logit('Reset failed multiple times - restart watchdog')
 								raise ConnectionAbortedError
-							
+
 
 				time.sleep(args.wait)
 				resettime = time.time()
