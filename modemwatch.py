@@ -1,18 +1,19 @@
-#!/usr/bin/python -u
+#!/usr/bin/python
 import argparse
 import time
 import requests
 import os
 import subprocess
 def logit(msg):
-	global logfile
+	global logfile, test
 
-#	with open(logfile,'a',0) as f:
 	logfile.write(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg + '\n')
 	logfile.flush()
+	if test:
+		print(time.strftime('%a %d %b %Y %H:%M:%S: ') + msg)
 
 def RobustPing(dests, verbose=True):
-	global badping, testfile, destindex, lastdest, null
+	global badping, testfile, destindex, lastdest, null, test
 	dest = dests[destindex]
 	lastdest = dest
 	destindex = (destindex + 1)%len(dests)
@@ -48,7 +49,6 @@ netdowntime = 0
 resettime = 0
 null = open('/dev/null','a')
 
-
 parser = argparse.ArgumentParser(description='Reset modem on prolonged internet outage')
 parser.add_argument('-i', '--interval', default = 60, type = int, help = 'ping interval in seconds')
 parser.add_argument('-o', '--outage', default = 30, type = int, help = 'reset after this many minutes')
@@ -59,11 +59,22 @@ parser.add_argument('-v', '--verbose',default = False, action='store_true')
 parser.add_argument('-t', '--test',default=False,action='store_true')
 parser.add_argument('-c', '--confirm',default=12, type = int, help = 'interval in hours for issuing log messages confirming running')
 parser.add_argument('--testfile',default='simnetup')
+parser.add_argument('--cmd', default='')
 parser.add_argument('--modem',default='modempowercontrol.pdxhome')
 args = parser.parse_args()
 logfile = args.logfile
-cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
+if args.cmd == '':
+	cmd = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
+else:
+	cmd = args.cmd
 test = args.test
+if test:
+	args.interval = 1
+	args.outage = .25
+	args.wait = 10
+	logfile.seek(0)
+	logfile.truncate()
+	logit('Truncated log for testing')
 testfile = args.testfile
 confirminterval = args.confirm * 60 * 60
 nextconfirm = time.time()+confirminterval
@@ -73,7 +84,6 @@ logit('*********************************************')
 logit('Modemwatch starting')
 for arg, val in vars(args).items():
 	logit('    '+ repr(arg)+' = '+repr(val))
-#logit(repr(args))
 while True:
 	while netup:
 		if (time.time() > nextconfirm) and (confirminterval != 0):
@@ -98,8 +108,28 @@ while True:
 			now = time.time()
 			logit('Ping continues fail: '+ lastdest + ' Down {0:.0f} seconds {1:.0f} to reset'.format(now - netdowntime,args.outage*60 - (now-resettime)))
 			if now - resettime > args.outage*60:
-				r = requests.get(cmd)
-				logit('Issue modem reset; delay {0:d} seconds; status response: {1:d}'.format(args.wait,r.status_code))
+				if test:
+					logit('Test modem reset; delay {} seconds: {}'.format(args.wait, cmd))
+				else:
+					logit('Issue modem reset and delay {0:d} seconds'.format(args.wait))
+					tries = 5
+					success = False
+					while not success:
+						try:
+							r = requests.get(cmd)
+							logit('Reset try response (tries = {}): {}'.format(tries, r.status_code))
+							if r.status_code == 200:
+								success = True
+						except Exception as E:
+							logit('Exception trying to do reset (tries  {}): {}'.format(tries, E))
+							tries = tries - 1
+							if tries > 0:
+								time.sleep(15)
+							else:
+								logit('Reset failed multiple times - restart watchdog')
+								raise ConnectionAbortedError
+
+
 				time.sleep(args.wait)
 				resettime = time.time()
 				logit('Resuming network testing')
