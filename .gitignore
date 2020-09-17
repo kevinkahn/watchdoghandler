@@ -2,3 +2,4 @@
 .gitignore
 .idea/vcs.xml
 .idea/workspace.xml
+.idea/codeStyleConfig.xml

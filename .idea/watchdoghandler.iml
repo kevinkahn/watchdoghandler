@@ -4,10 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/Deprecated" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.5.3 (sftp://pi@rpi-dev7.pgawhome:8623" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="PDX Dev7x" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
-  </component>
-  <component name="TestRunnerService">
-    <option name="PROJECT_TEST_RUNNER" value="Unittests" />
   </component>
 </module>
