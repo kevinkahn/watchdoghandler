@@ -9,7 +9,7 @@ After=network.target
 Type=simple
 
 # try not to start until system time has had a chance to update
-ExecStart=/home/pi/modemwatch.py -v --dests 8.8.8.8 www.cnn.com www.microsoft.com
+ExecStart=/home/pi/modemwatch.py -v --dests 8.8.8.8 www.cnn.com www.microsoft.com --domain pdxhome --dualdevices --interdelay 60
 # for secondary watcher set -0 100 should allow primary 2-3 shots at resetting modem before secondary tries to
 WorkingDirectory=/home/pi
 Restart=on-failure

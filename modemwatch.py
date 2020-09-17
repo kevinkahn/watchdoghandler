@@ -79,18 +79,21 @@ parser.add_argument('-c', '--confirm',default=12, type = int, help = 'interval i
 parser.add_argument('--testfile',default='simnetup')
 parser.add_argument('--cmdm', default='')
 parser.add_argument('--cmdr', default='')
-parser.add_argument('--modem',default='modempower.pdxhome')
-parser.add_argument('--router',default='routerpower.pdxhome')
+parser.add_argument('--domain', default='pdxhome')
+parser.add_argument('--modem',default='modempower')
+parser.add_argument('--router',default='routerpower')
 parser.add_argument('--dualdevices',default=False,action='store_true')
 parser.add_argument('--interdelay', default=1,type=int,help = 'delay between modem reset and router reset')
 args = parser.parse_args()
 logfile = args.logfile
+routeradr = args.router + '.' + args.domain
+modemadr = args.modem + '.' + args.domain
 if args.cmdm == '':
-	cmdm = 'http://'+args.modem+'/cm?cmnd=Power1%20ON'
+	cmdm = 'http://'+modemadr+'/cm?cmnd=Power1%20ON'
 else:
 	cmdm = args.cmdm
 if args.cmdr == '':
-	cmdr = 'http://'+args.router+'/cm?cmnd=Power1%20ON'
+	cmdr = 'http://'+routeradr+'/cm?cmnd=Power1%20ON'
 else:
 	cmdr = args.cmdm
 
@@ -112,6 +115,12 @@ logit('*********************************************')
 logit('Modemwatch starting')
 for arg, val in vars(args).items():
 	logit('    '+ repr(arg)+' = '+repr(val))
+logit('Reset settings:')
+logit('Modem: {}'.format(modemadr))
+logit('Modem reset command: {}'.format(cmdm))
+if args.dualdevices:
+	logit('Router: {}'.format(routeradr))
+	logit('Router reset command: {}'.format(cmdr))
 while True:
 	while netup:
 		if (time.time() > nextconfirm) and (confirminterval != 0):
